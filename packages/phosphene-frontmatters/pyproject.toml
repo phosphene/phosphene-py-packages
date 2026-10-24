@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phosphene-frontmatters"
+version = "0.1.0"
+description = "Graduated discovery registry for platform markdown assets (T-043)"
+requires-python = ">=3.10"
+dependencies = [
+    "phosphene-mdrag",
+    "ruamel.yaml>=0.17.40",
+    "pydantic>=2.0.0",
+    "python-frontmatter>=1.0.0",
+    "behave>=1.2.6",
+    "pytest>=7.0.0",
+]
+
+[tool.uv.sources]
+phosphene-mdrag = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/phosphene"]
