@@ -1,0 +1,9 @@
+[tool.uv.workspace]
+members = [
+    "packages/*",
+]
+
+[tool.uv.sources]
+phosphene-core = { workspace = true }
+phosphene-mdrag = { workspace = true }
+phosphene-frontmatters = { workspace = true }
