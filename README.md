@@ -13,6 +13,7 @@ This repository provides standalone distributions of core Phosphene libraries fo
 | **`phosphene-core`** | Shared foundation models & axiomatic base classes (`InvariantStatic`, `MutableDynamic`, etc.) | `0.1.0` |
 | **`phosphene-mdrag`** | Extensible Scientific Markdown Orchestration engine (block rules, morphisms, discovery) | `0.1.0` |
 | **`phosphene-frontmatters`** | Graduated discovery registry & contract management for platform markdown assets | `0.1.0` |
+| **`phosphene-spatiograph`** | Canonical Spatio-Graphic Archival Engine, RO-Crate 1.1 Packaging, BagIt Intake & IIIF 3.0 Projection | `0.1.0` |
 
 ---
 
