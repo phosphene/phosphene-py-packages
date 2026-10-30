@@ -14,6 +14,7 @@ This repository provides standalone distributions of core Phosphene libraries fo
 | **`phosphene-mdrag`** | Extensible Scientific Markdown Orchestration engine (block rules, morphisms, discovery) | `0.1.0` |
 | **`phosphene-frontmatters`** | Graduated discovery registry & contract management for platform markdown assets | `0.1.0` |
 | **`phosphene-spatiograph`** | Canonical Spatio-Graphic Archival Engine, RO-Crate 1.1 Packaging, BagIt Intake & IIIF 3.0 Projection | `0.1.0` |
+| **`phosphene-myths`** | Unified Myth & Cross-Domain Evidence Engine, Relational MythStore & Identity Bridge | `0.1.0` |
 
 ---
 

@@ -8,3 +8,4 @@ phosphene-core = { workspace = true }
 phosphene-mdrag = { workspace = true }
 phosphene-frontmatters = { workspace = true }
 phosphene-spatiograph = { workspace = true }
+phosphene-myths = { workspace = true }
