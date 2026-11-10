@@ -10,3 +10,4 @@ phosphene-frontmatters = { workspace = true }
 phosphene-spatiograph = { workspace = true }
 phosphene-myths = { workspace = true }
 phosphene-imi-wordpress = { workspace = true }
+phosphene-refverify = { workspace = true }
