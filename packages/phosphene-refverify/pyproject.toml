@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "refverify"
+name = "phosphene-refverify"
 version = "0.2.0"
 description = "Scholarly reference verification and quality-control gate for academic manuscripts and wikitext."
 readme = "README.md"
