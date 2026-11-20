@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phosphene-holonomy"
+version = "0.1.0"
+description = "Differential-geometric, data-preserving, and macroevolutionary diversification primitives"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Phosphene Team", email = "flow@ind.media" }
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pydantic>=2.10.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "hypothesis>=6.152.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "hypothesis>=6.152.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/phosphene"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

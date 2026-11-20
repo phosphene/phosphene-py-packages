@@ -1,0 +1,56 @@
+{
+  "source": "Valente, L.M., A.B. Phillimore and R.S. Etienne (2015). Equilibrium and non-equilibrium dynamics simultaneously operate in the Galapagos islands. Ecology Letters 18: 844-852.",
+  "doi": "10.1111/ele.12461",
+  "island_age_myr": 4.0,
+  "mainland_pool_size": 1000,
+  "clades": [
+    {
+      "clade_name": "Coccyzus",
+      "status": "Non_endemic_MaxAge",
+      "missing_species": 0,
+      "branching_times": [7.456]
+    },
+    {
+      "clade_name": "Dendroica",
+      "status": "Non_endemic",
+      "missing_species": 0,
+      "branching_times": [0.34]
+    },
+    {
+      "clade_name": "Finches",
+      "status": "Endemic",
+      "missing_species": 0,
+      "branching_times": [3.0282, 1.3227, 0.8223, 0.4286, 0.3462, 0.245, 0.118, 0.0808, 0.0756, 0.0527, 0.0525, 0.0327, 0.0322, 0.0221, 0.0118]
+    },
+    {
+      "clade_name": "Mimus",
+      "status": "Endemic",
+      "missing_species": 0,
+      "branching_times": [3.958, 3.422, 2.884, 0.459]
+    },
+    {
+      "clade_name": "Myiarchus",
+      "status": "Endemic",
+      "missing_species": 0,
+      "branching_times": [0.855]
+    },
+    {
+      "clade_name": "Progne",
+      "status": "Endemic",
+      "missing_species": 0,
+      "branching_times": [0.086]
+    },
+    {
+      "clade_name": "Pyrocephalus",
+      "status": "Non_endemic_MaxAge",
+      "missing_species": 0,
+      "branching_times": [10.285]
+    },
+    {
+      "clade_name": "Zenaida",
+      "status": "Endemic",
+      "missing_species": 0,
+      "branching_times": [3.51]
+    }
+  ]
+}
