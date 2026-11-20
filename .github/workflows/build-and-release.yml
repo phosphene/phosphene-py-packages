@@ -53,6 +53,7 @@ jobs:
           python -c "import phosphene.mdrag; print('phosphene.mdrag loaded successfully')"
           python -c "import phosphene.frontmatters; print('phosphene.frontmatters loaded successfully')"
           python -c "import phosphene.refverify; print('phosphene.refverify loaded successfully')"
+          python -c "import phosphene.holonomy; print('phosphene.holonomy loaded successfully')"
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
