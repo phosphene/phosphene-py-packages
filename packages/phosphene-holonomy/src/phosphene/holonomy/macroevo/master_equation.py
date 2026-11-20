@@ -1,12 +1,13 @@
-"""Continuous-time Master Equation solver for Diversity-Dependent Diversification (Etienne 2012).
+"""Unified Continuous-Time Master Equation Solver for Diversity-Dependent Diversification (Etienne 2012).
 
-Solves the exact continuous-time Markov master equation P(n, t) for cladogenesis
-under carrying-capacity saturation:
-    lambda(n) = max(0, lambda_0 * (1 - n/K))
-    mu(n) = mu_0
+Built directly on ``holonomy.core.capacity.CapacityEdge`` and ``holonomy.macroevo.escalation``
+(``BranchingState``, ``BranchingTrace``, ``metzler_generator``, and pluggable propagators:
+Padé, sparse Krylov, and Jensen Uniformization). Zero duplicate generator logic.
 
-Replaces random-walk MCMC approximations with exact matrix exponential and ODE integration.
-Supports exact log-likelihood evaluation of branching times conditioning on survival and crown age.
+Genealogy:
+    Rung: 2 (full richness distribution dP/dt = Q P) and Rung 3 (capacity-bounded
+        branching likelihood with survival conditioning and soc in {1, 2}).
+    Literature: Etienne et al. (2012) Proc. R. Soc. B 279:1300–1309.
 """
 
 from __future__ import annotations
@@ -17,209 +18,263 @@ from typing import Sequence, Tuple
 
 import numpy as np
 from scipy.integrate import solve_ivp
-from scipy.linalg import expm
+
+from phosphene.holonomy.core.capacity import CapacityEdge, capacity_throttle
+from phosphene.holonomy.macroevo.escalation import (
+    BranchingTrace,
+    Propagator,
+    metzler_generator,
+    propagate_dense_pade,
+    step_interval_vertex,
+    step_observation_vertex,
+)
 
 
 @dataclass(frozen=True)
 class MasterEquationParams:
-    """Parameters for diversity-dependent diversification master equation."""
+    """Parameters for diversity-dependent diversification master equation.
 
-    lambda0: float  # Baseline speciation rate (Myr^-1)
-    mu0: float      # Baseline extinction rate (Myr^-1)
-    K: float        # Clade carrying capacity (K species ceiling)
+    Dimensions:
+        lambda0: [T^-1] Baseline speciation rate (> 0).
+        mu0: [T^-1] Baseline extinction rate (>= 0).
+        K: [lineages] Carrying capacity ceiling (> 0).
+        max_richness: [lineages] Truncation state space for forward ODE solution.
+        dd_model: 1.3 (linear speciation drop to 0 at K) or 1.0 (linear to lambda0 - mu0).
+    """
+
+    lambda0: float
+    mu0: float
+    K: float
     max_richness: int = 50
-    dd_model: float = 1.3  # 1.3: linear to K; 1.0: linear to (lambda - mu)
+    dd_model: float = 1.3
 
     def __post_init__(self) -> None:
-        if self.lambda0 <= 0.0:
-            raise ValueError(f"lambda0 must be > 0.0, got {self.lambda0}")
-        if self.mu0 < 0.0:
-            raise ValueError(f"mu0 must be >= 0.0, got {self.mu0}")
-        if self.K <= 0.0:
-            raise ValueError(f"Carrying capacity K must be > 0.0, got {self.K}")
+        if not math.isfinite(self.lambda0) or self.lambda0 <= 0.0:
+            raise ValueError(f"lambda0 must be finite and > 0.0, got {self.lambda0}")
+        if not math.isfinite(self.mu0) or self.mu0 < 0.0:
+            raise ValueError(f"mu0 must be finite and >= 0.0, got {self.mu0}")
+        if not math.isfinite(self.K) or self.K <= 0.0:
+            raise ValueError(f"Carrying capacity K must be finite and > 0.0, got {self.K}")
 
 
-def construct_transition_matrix(params: MasterEquationParams) -> np.ndarray:
-    """Build tridiagonal transition rate matrix Q for master equation dP/dt = Q * P.
+def transition_matrix(params: MasterEquationParams) -> np.ndarray:
+    """Tridiagonal forward transition rate matrix Q for dP/dt = Q P on n in [0, max_richness].
 
-    State space: n in [0, max_richness]
-    Transition rates:
-      n -> n + 1: lambda(n) * n
-      n -> n - 1: mu(n) * n
+    Genealogy:
+        Rung: 2 (Read-only 2D ``numpy`` Metzler matrix with zero column sums).
+
+    Objective:
+        Q[n+1, n] = n * lambda(n),   Q[n-1, n] = n * mu0,   Q[n, n] = -(Q[n+1, n] + Q[n-1, n])
+
+    Dimensions:
+        Returns: Read-only (max_richness + 1, max_richness + 1) float64 matrix [T^-1].
     """
+    edge = CapacityEdge(k=0, K=params.K)
+    lam_vec = capacity_throttle(
+        edge,
+        n_max=params.max_richness,
+        lam0=params.lambda0,
+        mu0=params.mu0,
+        dd_model=params.dd_model,
+    )
     N = params.max_richness + 1
     Q = np.zeros((N, N), dtype=np.float64)
 
-    for n in range(N):
-        # Speciation transition: n -> n + 1
-        if n < params.max_richness and n > 0:
-            lam_n = max(0.0, params.lambda0 * (1.0 - n / params.K))
-            rate_up = lam_n * n
+    for n in range(1, N):
+        if n < params.max_richness:
+            rate_up = float(lam_vec[n]) * n
             Q[n + 1, n] += rate_up
             Q[n, n] -= rate_up
+        rate_down = params.mu0 * n
+        Q[n - 1, n] += rate_down
+        Q[n, n] -= rate_down
 
-        # Extinction transition: n -> n - 1
-        if n > 0:
-            rate_down = params.mu0 * n
-            Q[n - 1, n] += rate_down
-            Q[n, n] -= rate_down
-
+    Q.flags.writeable = False
     return Q
 
 
-def solve_master_equation(
+def master_equation_solution(
     params: MasterEquationParams,
     initial_richness: int = 1,
     time_span: float = 10.0,
     num_eval_points: int = 101,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Integrate dP/dt = Q * P from t=0 to time_span.
+    """Forward solution of dP/dt = Q P over [0, time_span].
 
-    Returns:
-        times: (T,) array of time points
-        probabilities: (max_richness + 1, T) array of state probabilities
+    Genealogy:
+        Rung: 2 (Continuous-time Markov ODE integration via RK45).
+
+    Dimensions:
+        Returns: Read-only ``(times, probabilities)`` arrays of shapes ``(T,)`` and ``(max_richness+1, T)``.
     """
-    Q = construct_transition_matrix(params)
+    Q = transition_matrix(params)
     N = params.max_richness + 1
-
     P0 = np.zeros(N, dtype=np.float64)
     P0[initial_richness] = 1.0
 
-    def rhs(t: float, P: np.ndarray) -> np.ndarray:
-        return Q @ P
-
     t_eval = np.linspace(0.0, time_span, num_eval_points)
-    sol = solve_ivp(rhs, (0.0, time_span), P0, t_eval=t_eval, method="RK45")
-
-    return sol.t, sol.y
-
-
-def _build_etienne_generator_matrix(
-    la: float, mu: float, k_cap: float, lx: int, k_lineages: int, dd_model: float = 1.3
-) -> np.ndarray:
-    """Build tridiagonal generator matrix M for unobserved lineages during interval k."""
-    nvec = np.arange(lx, dtype=float)
-    if dd_model == 1.3:
-        lavec = np.maximum(0.0, la * (1.0 - (nvec + k_lineages) / k_cap))
-        muvec = np.full(lx, mu, dtype=float)
-    else:
-        lavec = np.maximum(0.0, la - (la - mu) * (nvec + k_lineages) / k_cap)
-        muvec = np.full(lx, mu, dtype=float)
-
-    m_matrix = np.zeros((lx, lx), dtype=float)
-    for j in range(lx - 1):
-        m_matrix[j + 1, j] = lavec[j] * (nvec[j] + 2.0 * k_lineages)
-    for j in range(1, lx):
-        m_matrix[j - 1, j] = muvec[j] * nvec[j]
-    for j in range(lx):
-        m_matrix[j, j] = -(lavec[j] + muvec[j]) * (nvec[j] + k_lineages)
-    m_matrix[lx - 1, lx - 1] = -muvec[lx - 1] * (nvec[lx - 1] + k_lineages)
-    return m_matrix
+    sol = solve_ivp(lambda _t, P: Q @ P, (0.0, time_span), P0, t_eval=t_eval, method="RK45")
+    t_out = np.array(sol.t, dtype=np.float64, copy=True)
+    y_out = np.array(sol.y, dtype=np.float64, copy=True)
+    t_out.flags.writeable = False
+    y_out.flags.writeable = False
+    return t_out, y_out
 
 
-def compute_etienne_branching_loglik(
+def branching_loglik(
     params: MasterEquationParams,
     branching_times: Sequence[float],
     condition_on_survival: bool = True,
-    soc: int = 2,  # 2 for crown age, 1 for stem age
+    soc: int = 2,
+    propagator: Propagator = propagate_dense_pade,
 ) -> float:
-    """Compute exact log-likelihood of branching times under Etienne's master equation.
+    """Exact log-likelihood of branching times under Etienne (2012) master equation.
 
-    Parameters
-    ----------
-    params : MasterEquationParams
-        Model parameters (lambda0, mu0, K).
-    branching_times : Sequence[float]
-        Branching times in Myr before present (positive, descending).
-    condition_on_survival : bool
-        If True, condition on clade surviving to present.
-    soc : int
-        2 for crown age, 1 for stem age.
+    Genealogy:
+        Rung: 3 (Unified ``CapacityEdge`` + ``BranchingTrace`` + pluggable ``propagator``).
+        Collapses To: Constant-rate birth-death likelihood as K -> inf.
+        Literature: Etienne et al. (2012) Proc. R. Soc. B 279:1300–1309.
+
+    Objective:
+        Interleaves continuous Metzler propagation ``exp(M_k dt)`` and cladogenetic
+        observation conditioning ``diag(lam_vec)``, optionally conditioned on clade
+        survival to present under stem (soc=1) or crown (soc=2) age.
+
+    Dimensions:
+        params: MasterEquationParams (lambda0 [T^-1], mu0 [T^-1], K [lineages]).
+        branching_times: [T] Positive branching times before present.
+        Returns: [nats] Exact log-likelihood, or ``-math.inf`` when S > ceil(K).
+
+    Boundary & Falsification Semantics:
+        - Empty branching_times or S > ceil(K) under dd_model == 1.3 -> returns ``-math.inf``
+          (exact model falsification, never a crash).
     """
-    brts = np.sort(np.abs(np.asarray(branching_times, dtype=float)))[::-1]
+    brts = np.sort(np.abs(np.asarray(branching_times, dtype=np.float64)))[::-1]
     if len(brts) == 0:
-        return -np.inf
+        return -math.inf
     if brts[-1] != 0.0:
         brts = np.append(brts, 0.0)
 
     s_species = len(brts) - 1 + (soc - 2)
     if s_species < 1:
-        return -np.inf
+        return -math.inf
 
     k_cap = params.K
     if s_species > math.ceil(k_cap) and params.dd_model == 1.3:
-        return -np.inf
+        return -math.inf
 
     lx = int(math.ceil(k_cap)) + 4
-    loglik = math.lgamma(s_species)
+    n_max = lx - 1
+    initial_k = 1 + (soc - 2)
+    trace = BranchingTrace.initialize(crown_age=float(brts[0]), n_max=n_max, initial_k=initial_k)
 
-    probs = np.zeros(lx, dtype=float)
-    probs[0] = 1.0
-
-    la = params.lambda0
-    mu = params.mu0
-
+    num_intervals = s_species + 1 - soc
     for k_idx in range(1, s_species + 2 - soc):
-        k1 = k_idx + (soc - 2)
-        dt = abs(brts[k_idx] - brts[k_idx - 1])
-        if dt > 0:
-            m_mat = _build_etienne_generator_matrix(la, mu, k_cap, lx, k1, params.dd_model)
-            probs = expm(m_mat * dt).dot(probs)
+        dt = abs(float(brts[k_idx] - brts[k_idx - 1]))
+        if dt > 0.0:
+            trace = trace.append(
+                step_interval_vertex(
+                    trace.current,
+                    dt=dt,
+                    lam0=params.lambda0,
+                    mu0=params.mu0,
+                    K=k_cap,
+                    propagator=propagator,
+                    dd_model=params.dd_model,
+                    reflect_top=True,
+                )
+            )
+        if k_idx <= num_intervals:
+            obs = step_observation_vertex(
+                trace.current,
+                lam0=params.lambda0,
+                K=k_cap,
+                mu0=params.mu0,
+                dd_model=params.dd_model,
+            )
+            if not math.isfinite(obs.lnL):
+                return -math.inf
+            trace = trace.append(obs)
 
-        if k_idx < (s_species + 2 - soc):
-            nvec = np.arange(lx, dtype=float)
-            if params.dd_model == 1.3:
-                lavec = np.maximum(0.0, la * (1.0 - (nvec + k1) / k_cap))
-            else:
-                lavec = np.maximum(0.0, la - (la - mu) * (nvec + k1) / k_cap)
-            probs = lavec * probs
-            s_p = float(np.sum(probs))
-            if s_p <= 0.0 or np.isnan(s_p):
-                return -np.inf
-            loglik += math.log(s_p)
-            probs /= s_p
+    p0 = float(trace.current.P[0])
+    if p0 <= 0.0 or not math.isfinite(p0):
+        return -math.inf
 
-    p0 = float(probs[0])
-    if p0 <= 0.0 or np.isnan(p0):
-        return -np.inf
-    loglik += math.log(p0)
-    loglik -= math.lgamma(s_species + 1)
+    loglik = math.lgamma(s_species) + trace.current.lnL + math.log(p0) - math.lgamma(s_species + 1)
 
     if condition_on_survival:
-        probsn = np.zeros(lx, dtype=float)
-        probsn[0] = 1.0
-        dt_total = abs(brts[0] - brts[-1])
-        m_mat_total = _build_etienne_generator_matrix(la, mu, k_cap, lx, soc, params.dd_model)
-        probsn = expm(m_mat_total * dt_total).dot(probsn)
-        nvec = np.arange(lx, dtype=float)
-        if soc == 2:
-            aux = (nvec + 2.0) * (nvec + 3.0) / 6.0
-        else:
-            aux = nvec + 1.0
-        probsc = probsn / aux
-        norm_sum = float(np.sum(probsc))
-        if norm_sum <= 0.0 or np.isnan(norm_sum):
-            return -np.inf
+        edge_surv = CapacityEdge(k=soc, K=k_cap)
+        lam_surv = capacity_throttle(
+            edge_surv,
+            n_max=n_max,
+            lam0=params.lambda0,
+            mu0=params.mu0,
+            dd_model=params.dd_model,
+        )
+        m_total = metzler_generator(k=soc, lam_vec=lam_surv, mu0=params.mu0, reflect_top=True)
+        p_init = np.zeros(lx, dtype=np.float64)
+        p_init[0] = 1.0
+        dt_total = abs(float(brts[0] - brts[-1]))
+        probsn = propagator(m_total, p_init, dt_total)
+
+        nvec = np.arange(lx, dtype=np.float64)
+        aux = ((nvec + 2.0) * (nvec + 3.0) / 6.0) if soc == 2 else (nvec + 1.0)
+        norm_sum = float(np.sum(probsn / aux))
+        if norm_sum <= 0.0 or not math.isfinite(norm_sum):
+            return -math.inf
         loglik -= math.log(norm_sum)
 
     return float(loglik)
 
 
-def profile_etienne_k(
+def carrying_capacity_profile(
     branching_times: Sequence[float],
     k_grid: Sequence[float],
     fixed_lambda0: float = 1.2,
     fixed_mu0: float = 0.1,
     soc: int = 2,
+    condition_on_survival: bool = True,
+    propagator: Propagator = propagate_dense_pade,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Compute profile log-likelihood across carrying capacity K."""
-    lls = []
-    for k in k_grid:
-        p = MasterEquationParams(
-            lambda0=fixed_lambda0,
-            mu0=fixed_mu0,
-            K=k,
+    """Deterministic profile log-likelihood curve across a carrying-capacity grid K.
+
+    Genealogy:
+        Rung: 3 profile evaluation over ``branching_loglik``.
+
+    Dimensions:
+        Returns: Read-only ``(k_array, loglik_array)`` float64 arrays.
+    """
+    lls = [
+        branching_loglik(
+            MasterEquationParams(lambda0=fixed_lambda0, mu0=fixed_mu0, K=float(k)),
+            branching_times,
+            condition_on_survival=condition_on_survival,
+            soc=soc,
+            propagator=propagator,
         )
-        ll = compute_etienne_branching_loglik(p, branching_times, condition_on_survival=True, soc=soc)
-        lls.append(ll)
-    return np.array(k_grid, dtype=float), np.array(lls, dtype=float)
+        for k in k_grid
+    ]
+    k_arr = np.array(k_grid, dtype=np.float64)
+    ll_arr = np.array(lls, dtype=np.float64)
+    k_arr.flags.writeable = False
+    ll_arr.flags.writeable = False
+    return k_arr, ll_arr
+
+
+# Backward-compatibility aliases
+construct_transition_matrix = transition_matrix
+solve_master_equation = master_equation_solution
+compute_etienne_branching_loglik = branching_loglik
+profile_etienne_k = carrying_capacity_profile
+
+__all__ = [
+    "MasterEquationParams",
+    "transition_matrix",
+    "master_equation_solution",
+    "branching_loglik",
+    "carrying_capacity_profile",
+    "construct_transition_matrix",
+    "solve_master_equation",
+    "compute_etienne_branching_loglik",
+    "profile_etienne_k",
+]

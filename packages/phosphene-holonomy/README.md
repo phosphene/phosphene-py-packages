@@ -66,13 +66,13 @@ Models biological form generation, allometric scaling, and permanent anatomical 
 - `remodeling.ontogenetic_trace` / `remodeling.morphological_defect`: Structural continuity and permanent skeletal divergence across cyclic loading.
 
 ### C. Deterministic Macroevolutionary Suite (`holonomy.macroevo`)
-Replaces heuristic, destructive random-walk MCMC tools (such as PyRate) with deterministic profile likelihoods, continuous-time Markov models, and calibration oracles:
-- `escalation`: Multi-tier numerical genealogy linking scalar closed forms to matrix semigroups, evaluated against the Rung 0 background realization.
-- `master_equation`: Continuous-time Markov master equation solver (Etienne 2012) via matrix exponentiation (`expm`), incorporating carrying capacity ceilings ($S \le K$) and survival conditioning.
-- `diversity_surface`: Exact profile likelihood surfaces $\mathcal{L}(G_l)$ and formal $\chi^2$ likelihood-ratio tests over lineage-through-time curves.
-- `taphonomy`: Taphonomically conditioned Poisson occurrence models with Keiding (1975) truncation correction.
-- `galapagos`: Canonical Valente, Phillimore, & Etienne (2015) empirical insular avifaunal radiation dataset.
-- `comparative_metrics`: Cross-domain comparison contrasting bounded insular radiations against sparse continental taphonomy.
+Replaces heuristic, destructive random-walk MCMC tools (such as PyRate) with pure, data-agnostic deterministic likelihoods, continuous-time Markov models, and calibration oracles (zero disk I/O, zero study-specific prose):
+- `primitives`: Self-sufficient Rung 0/1 units of reasoning for Jetz (2012) Tip DR (`equal_splits`, `tip_dr`, `tip_dr_diagnostic`), Poisson (`log_poisson_count_pmf`, `log_poisson_process_density`), Keiding (`preservation_effort`, `keiding_observability_prob`, `log_keiding_conditioning`), Lineage Duration (`log_lineage_duration_density`, `log_turnover_survival`), and Standing Diversity.
+- `escalation`: Multi-tier numerical genealogy (Rung 0–3) linking scalar closed forms to Metzler semigroups (`propagate_dense_pade`, `propagate_sparse_krylov`, `propagate_uniformized`), paired with the Kneebone `BackgroundRealizationReport` (`background_realization`).
+- `master_equation`: Unified Etienne (2012) continuous-time Markov master equation solver (`branching_loglik`, `carrying_capacity_profile`) built directly on `CapacityEdge`, `BranchingTrace`, and pluggable propagators.
+- `diversity_surface`: Exact analytical profile likelihood surfaces (`profile_likelihood_surface`, `continuous_profile_likelihood_surface`) and formal $\chi^2$ LRT / AIC diagnostics.
+- `joint_likelihood`: Protocol-based taphonomically conditioned joint likelihood (`LineageObservation`, `joint_taphonomic_loglik` → `JointLikelihoodBreakdown`).
+- `phylogenetic_dr`: Pure string-to-value Newick parser (`newick_tip_paths`, strictly tip-to-root) and singularity diagnostics (`tree_tip_dr_diagnostics`).
 
 ---
 
@@ -133,7 +133,6 @@ print(f"Capacity Regime:     {report.bottleneck_regime}")
 - [`docs/PYTEST_AND_HYPOTHESIS_PATTERNS.md`](docs/PYTEST_AND_HYPOTHESIS_PATTERNS.md): Codified patterns and anti-patterns for scientific algebraic dynamics, strict IEEE-754 hygiene, and variational `target()` defect hunting.
 - [`docs/GENERALIZED_MATHEMATICAL_ARCHITECTURE.md`](docs/GENERALIZED_MATHEMATICAL_ARCHITECTURE.md): Formal architectural specification, semantic triad (Frege), and Three-Phase Process (Pull $\to$ Transform $\to$ Push).
 - [`docs/LITERATE_SPECIFICATION.md`](docs/LITERATE_SPECIFICATION.md): Literate code walkthrough and mathematical mapping across the core kernel and domain dialects.
-- [`docs/COMPARATIVE_PAPER_ETIENNE_VS_FOLEY.md`](docs/COMPARATIVE_PAPER_ETIENNE_VS_FOLEY.md): Comparative analysis: *“Transcending Birth-Death Storytelling: A Comparative Analysis of Diversity-Dependent Diversification in Insular Archipelagos vs. Continental Hominin Taphonomy”*.
 
 ---
 
