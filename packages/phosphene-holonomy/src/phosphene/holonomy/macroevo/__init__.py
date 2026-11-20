@@ -44,6 +44,7 @@ from phosphene.holonomy.macroevo.comparative_metrics import (
 from phosphene.holonomy.macroevo.escalation import (
     BranchingState,
     BranchingTrace,
+    BackgroundRealizationReport,
     ScientistEscalationReport,
     rung0_pure_death_logprob,
     rung0_constant_rate_loglik,
@@ -53,6 +54,7 @@ from phosphene.holonomy.macroevo.escalation import (
     propagate_sparse_krylov,
     step_interval_vertex,
     step_observation_vertex,
+    evaluate_with_background_realization,
     evaluate_with_escalation_ladder,
 )
 
@@ -86,6 +88,7 @@ __all__ = [
     "generate_canonical_comparison",
     "BranchingState",
     "BranchingTrace",
+    "BackgroundRealizationReport",
     "ScientistEscalationReport",
     "rung0_pure_death_logprob",
     "rung0_constant_rate_loglik",
@@ -95,5 +98,6 @@ __all__ = [
     "propagate_sparse_krylov",
     "step_interval_vertex",
     "step_observation_vertex",
+    "evaluate_with_background_realization",
     "evaluate_with_escalation_ladder",
 ]
