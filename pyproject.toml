@@ -11,3 +11,4 @@ phosphene-spatiograph = { workspace = true }
 phosphene-myths = { workspace = true }
 phosphene-imi-wordpress = { workspace = true }
 phosphene-refverify = { workspace = true }
+phosphene-holonomy = { workspace = true }

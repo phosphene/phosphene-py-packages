@@ -62,4 +62,6 @@ uv pip install "https://github.com/phosphene/phosphene-py-packages/releases/down
 ## CI / Release Automation
 
 * **Build & Verification:** Every push and pull request triggers `.github/workflows/build-and-release.yml`, which builds wheels for all packages in `packages/*` and tests cross-package imports in a clean virtual environment.
-* **Release Publishing:** Pushing a tag (e.g. `v0.1.0` or `pkg-mdrag-0.1.0`) automatically builds and publishes the distribution wheels as release assets on GitHub Releases.
+* **Release Publishing:** Pushing a tag (e.g. `v0.1.0` or `pkg-mdrag-0.1.0`) automatically builds and publishes the distribution wheels as release assets on GitHub Releases.| **** | Differential-geometric state preservation, non-abelian hysteresis & macroevolutionary diversification |  |
+
+
